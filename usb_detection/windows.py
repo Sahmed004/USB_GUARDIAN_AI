@@ -6,23 +6,28 @@ import json
 def detect_usb_devices():
 
     powershell_script = r"""
+    $ErrorActionPreference = 'Stop'
+
     Get-Disk |
     Where-Object { $_.BusType -eq 'USB' } |
     ForEach-Object {
         $disk = $_
 
         Get-Partition -DiskNumber $disk.Number -ErrorAction SilentlyContinue |
-        Get-Volume -ErrorAction SilentlyContinue |
         ForEach-Object {
-            [PSCustomObject]@{
-                Device = $disk.FriendlyName
-                DiskNumber = $disk.Number
-                Protocol = $disk.BusType.ToString()
-                CapacityGB = [math]::Round($disk.Size / 1GB, 2)
-                VolumeName = $_.FileSystemLabel
-                DriveLetter = $_.DriveLetter
-                FileSystem = $_.FileSystem
-                FreeGB = [math]::Round($_.SizeRemaining / 1GB, 2)
+            $partition = $_
+
+            $volume = Get-Volume -Partition $partition -ErrorAction SilentlyContinue
+
+            if ($volume -and $volume.DriveLetter) {
+                [PSCustomObject]@{
+                    name = $disk.FriendlyName
+                    mount_point = "$($volume.DriveLetter):\"
+                    volume_name = $volume.FileSystemLabel
+                    capacity_gb = [math]::Round($disk.Size / 1GB, 2)
+                    file_system = $volume.FileSystem
+                    free_gb = [math]::Round($volume.SizeRemaining / 1GB, 2)
+                }
             }
         }
     } | ConvertTo-Json -Compress
@@ -33,6 +38,7 @@ def detect_usb_devices():
             [
                 "powershell",
                 "-NoProfile",
+                "-NonInteractive",
                 "-Command",
                 powershell_script
             ],
@@ -77,14 +83,12 @@ if __name__ == "__main__":
         print("\nUSB DEVICES DETECTED\n")
 
         for device in usb_devices:
-            print(f"Device: {device['Device']}")
-            print(f"Disk number: {device['DiskNumber']}")
-            print(f"Protocol: {device['Protocol']}")
-            print(f"Capacity: {device['CapacityGB']} GB")
-            print(f"Volume name: {device['VolumeName']}")
-            print(f"Drive letter: {device['DriveLetter']}")
-            print(f"File system: {device['FileSystem']}")
-            print(f"Free space: {device['FreeGB']} GB")
+            print(f"Device: {device['name']}")
+            print(f"Location: {device['mount_point']}")
+            print(f"Capacity: {device['capacity_gb']} GB")
+            print(f"Volume name: {device['volume_name']}")
+            print(f"File system: {device['file_system']}")
+            print(f"Free space: {device['free_gb']} GB")
             print("-" * 35)
 
     else:
