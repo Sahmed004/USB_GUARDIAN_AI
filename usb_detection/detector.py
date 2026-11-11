@@ -15,5 +15,11 @@ def detect_connected_usb():
         from usb_detection.windows import detect_usb_devices as detect_windows_usb
         return detect_windows_usb()
 
+    elif operating_system == "Linux":
+        # Streamlit Cloud runs on Linux.
+        # It cannot access USB devices connected to visitors' computers.
+        return []
+
     else:
         raise OSError("Operating system not supported.")
+
